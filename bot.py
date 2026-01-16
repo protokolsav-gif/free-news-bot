@@ -52,9 +52,15 @@ KEYWORDS = [
     "investigation", "leak", "police", "government",
     "election", "corruption", "protest"
 ]
+
+
 def send(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    r = requests.post(url, data={"chat_id": CHAT_ID, "text": text})
+    r = requests.post(url, data={
+        "chat_id": CHAT_ID,
+        "text": text,
+        "disable_web_page_preview": False
+    })
 
     try:
         data = r.json()
@@ -68,29 +74,34 @@ def send(text):
 
 
 def main():
-        tz = ZoneInfo("Europe/Moscow")
+    # московское время
+    tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(tz)
     hour = now.hour
 
+    # работаем только с 06:00 до 22:00
     if hour < 6 or hour > 22:
         print("Outside working hours (MSK):", now)
         return
 
     cutoff = now - timedelta(hours=1)
-
     found = []
 
     for url in RSS_FEEDS:
         feed = feedparser.parse(url)
+
         for e in feed.entries:
             if not hasattr(e, "published_parsed"):
                 continue
 
-            published = datetime(*e.published_parsed[:6], tzinfo=timezone.utc)
-            if published < cutoff:
+            published_utc = datetime(*e.published_parsed[:6], tzinfo=timezone.utc)
+            published_msk = published_utc.astimezone(tz)
+
+            if published_msk < cutoff:
                 continue
 
             text = (e.title + " " + getattr(e, "summary", "")).lower()
+
             if any(k in text for k in KEYWORDS):
                 found.append((e.title, e.link))
 
@@ -98,7 +109,7 @@ def main():
         send("За последний час — ничего важного.")
         return
 
-    message = "🗞 Новости за последний час:\n\n"
+    message = "🗞 Новости за последний час (МСК):\n\n"
     for i, (title, link) in enumerate(found[:15], 1):
         message += f"{i}. {title}\n{link}\n\n"
 
@@ -107,4 +118,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
