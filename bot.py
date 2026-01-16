@@ -1,52 +1,84 @@
 import feedparser
 import requests
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-import openai
+from openai import OpenAI
 
-# === НАСТРОЙКИ ===
+# ===== НАСТРОЙКИ =====
 
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 
-openai.api_key = OPENAI_API_KEY
-
-# === RSS ===
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 RSS_FEEDS = [
-    # федеральные
-    "https://tass.ru/rss/v2.xml",
-    "https://ria.ru/export/rss2/archive/index.xml",
-    "https://www.interfax.ru/rss.asp",
-    "https://www.kommersant.ru/rss/regions",
-
-    # юг / край
     "https://kubnews.ru/rss/",
     "https://yuga.ru/rss/",
-    "https://kavkaz-uzel.eu/rss",
-    "https://fedpress.ru/rss/yug",
-    "https://www.yugopolis.ru/rss",
-
-    # краснодар
     "https://93.ru/rss/",
     "https://www.livekuban.ru/rss",
-    "https://kubanpress.ru/rss",
-    "https://www.dg-yug.ru/rss.xml",
-    "https://yugtimes.com/rss/",
-    "https://www.kuban.kp.ru/rss/",
-    "https://kuban.mk.ru/rss/",
 ]
 
-# === ТЕЛЕГРАМ ===
+KEYWORDS = [
+    "арест", "суд", "уголов", "полици", "протест",
+    "выбор", "корруп", "задерж", "обыск"
+]
+
+# ===== TELEGRAM =====
 
 def send(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={
-        "chat_id": CHAT_ID,
-        "text": text,
-        "disable_web_page_preview": True
-    })
+    requests.post(url, data={"chat_id": CHAT_ID, "text": text})
 
-# === NEURAL FIL
+# ===== AI =====
+
+def summarize(news):
+    prompt = (
+        "Ты редактор независимого медиа. "
+        "Кратко выдели 3–5 самых важных новостей:\n\n"
+        + "\n".join(news)
+    )
+
+    r = client.responses.create(
+        model="gpt-5-mini",
+        input=prompt,
+    )
+
+    return r.output_text
+
+# ===== MAIN =====
+
+def main():
+    tz = ZoneInfo("Europe/Moscow")
+    now = datetime.now(tz)
+
+    if not (6 <= now.hour <= 22):
+        return
+
+    cutoff = now - timedelta(hours=1)
+    collected = []
+
+    for url in RSS_FEEDS:
+        feed = feedparser.parse(url)
+        for e in feed.entries:
+            if not hasattr(e, "published_parsed"):
+                continue
+
+            published = datetime(*e.published_parsed[:6], tzinfo=tz)
+            if published < cutoff:
+                continue
+
+            text = (e.title + " " + getattr(e, "summary", "")).lower()
+            if any(k in text for k in KEYWORDS):
+                collected.append(f"• {e.title}\n{e.link}")
+
+    if not collected:
+        send("За последний час — ничего важного.")
+        return
+
+    summary = summarize(collected)
+    send("🗞 Сводка за последний час:\n\n" + summary)
+
+if __name__ == "__main__":
+    main()
