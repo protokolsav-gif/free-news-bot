@@ -7,9 +7,43 @@ BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 RSS_FEEDS = [
-    "https://www.reuters.com/world/rss",
-    "https://www.politico.com/rss/politics08.xml",
-    "https://www.theguardian.com/world/rss",
+    # федеральные
+    "https://tass.ru/rss/v2.xml",
+    "https://ria.ru/export/rss2/archive/index.xml",
+    "https://www.interfax.ru/rss.asp",
+    "https://www.kommersant.ru/rss/regions",
+
+    # юг / край
+    "https://kubnews.ru/rss/",
+    "https://yuga.ru/rss/",
+    "https://kavkaz-uzel.eu/rss",
+    "https://fedpress.ru/rss/yug",
+    "https://www.yugopolis.ru/rss",
+
+    # краснодар
+    "https://93.ru/rss/",
+    "https://www.livekuban.ru/rss",
+    "https://kubanpress.ru/rss",
+    "https://www.dg-yug.ru/rss.xml",
+    "https://yugtimes.com/rss/",
+    "https://www.kuban.kp.ru/rss/",
+    "https://kuban.mk.ru/rss/",
+
+    # сочи
+    "https://sochi24.tv/rss",
+    "https://scapp.ru/rss",
+
+    # новороссийск
+    "https://novorab.ru/rss",
+
+    # анапа
+    "https://anapa.media/rss",
+
+    # ейск
+    "https://yeisk.info/rss",
+
+    # официальное
+    "https://admkrai.krasnodar.ru/rss",
 ]
 
 KEYWORDS = [
