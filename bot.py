@@ -2,6 +2,7 @@ import feedparser
 import requests
 import os
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
@@ -67,7 +68,14 @@ def send(text):
 
 
 def main():
-    now = datetime.now(timezone.utc)
+        tz = ZoneInfo("Europe/Moscow")
+    now = datetime.now(tz)
+    hour = now.hour
+
+    if hour < 6 or hour > 22:
+        print("Outside working hours (MSK):", now)
+        return
+
     cutoff = now - timedelta(hours=1)
 
     found = []
