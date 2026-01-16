@@ -15,4 +15,6 @@ RSS_FEEDS = [
 KEYWORDS = [
     "sanction", "arrest", "law", "ban", "court",
     "investigation", "leak", "police", "government",
-    "election", "corruption
+    "election", "corruption", "protest"
+]
+
