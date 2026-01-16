@@ -4,8 +4,15 @@ import os
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+# ===== НАСТРОЙКИ =====
+
 BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+
+OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+
+# ===== RSS =====
 
 RSS_FEEDS = [
     # федеральные
@@ -48,73 +55,41 @@ RSS_FEEDS = [
 ]
 
 KEYWORDS = [
-    "sanction", "arrest", "law", "ban", "court",
-    "investigation", "leak", "police", "government",
-    "election", "corruption", "protest"
+    "арест", "суд", "задерж", "обыск", "дело",
+    "протест", "выбор", "коррупц", "запрет",
+    "штраф", "полици", "фсб", "ск", "чиновник"
 ]
 
+# ===== TELEGRAM =====
 
 def send(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    r = requests.post(url, data={
-        "chat_id": CHAT_ID,
-        "text": text,
-        "disable_web_page_preview": False
-    })
+    requests.post(url, data={"chat_id": CHAT_ID, "text": text})
 
-    try:
-        data = r.json()
-    except Exception:
-        data = {"not_json": r.text}
+# ===== OPENAI =====
 
-    print("TELEGRAM RESPONSE:", data)
+def summarize(title, link):
+    prompt = f"""
+Ты редактор регионального издания.
+Коротко (2–3 предложения) перескажи новость для редакционной сводки.
+Без воды, без оценок.
 
-    if not r.ok or (isinstance(data, dict) and data.get("ok") is False):
-        raise RuntimeError(f"Telegram error: {data}")
+Заголовок: {title}
+Ссылка: {link}
+"""
 
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
 
-def main():
-    # московское время
-    tz = ZoneInfo("Europe/Moscow")
-    now = datetime.now(tz)
-    hour = now.hour
+    data = {
+        "model": "gpt-5-mini",
+        "messages": [
+            {"role": "system", "content": "Ты новостной редактор."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.3
+    }
 
-    # работаем только с 06:00 до 22:00
-    if hour < 6 or hour > 22:
-        print("Outside working hours (MSK):", now)
-        return
-
-    cutoff = now - timedelta(hours=1)
-    found = []
-
-    for url in RSS_FEEDS:
-        feed = feedparser.parse(url)
-
-        for e in feed.entries:
-            if not hasattr(e, "published_parsed"):
-                continue
-
-            published_utc = datetime(*e.published_parsed[:6], tzinfo=timezone.utc)
-            published_msk = published_utc.astimezone(tz)
-
-            if published_msk < cutoff:
-                continue
-
-            text = (e.title + " " + getattr(e, "summary", "")).lower()
-
-            if any(k in text for k in KEYWORDS):
-                found.append((e.title, e.link))
-
-    if not found:
-        send("За последний час — ничего важного.")
-        return
-
-    message = "🗞 Новости за последний час (МСК):\n\n"
-    for i, (title, link) in enumerate(found[:15], 1):
-        message += f"{i}. {title}\n{link}\n\n"
-
-    send(message)
-
-
-if __name__ == "__main__":
-    main()
+    r = requests.post(OPENAI_URL, headers=headers, json=data, timeout=30)
