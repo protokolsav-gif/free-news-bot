@@ -20,6 +20,8 @@ RSS_FEEDS = [
     "https://www.livekuban.ru/rss",
 ]
 
+SENT_FILE = "sent_links.txt"
+
 # ===== TELEGRAM =====
 
 def send(text):
@@ -31,23 +33,35 @@ def send(text):
     })
     r.raise_for_status()
 
+# ===== ПАМЯТЬ =====
+
+def load_sent():
+    if not os.path.exists(SENT_FILE):
+        return set()
+    with open(SENT_FILE, "r", encoding="utf-8") as f:
+        return set(line.strip() for line in f if line.strip())
+
+def save_sent(links):
+    with open(SENT_FILE, "a", encoding="utf-8") as f:
+        for link in links:
+            f.write(link + "\n")
+
 # ===== AI =====
 
 def pick_top(items):
-    """
-    items: list of (title, link)
-    """
-    items = items[:40]  # ограничим, чтобы было дёшево
+    items = items[:40]
 
-    joined = "\n".join([f"{i+1}. {t}\n{l}" for i, (t, l) in enumerate(items)])
+    joined = "\n".join(
+        [f"{i+1}. {t}\n{l}" for i, (t, l) in enumerate(items)]
+    )
 
     prompt = f"""
-Ты новостной редактор. Стиль: сухо, нейтрально, без эмоций.
-Выбери 5 самых важных новостей из списка (приоритет Кубань/Краснодар/Сочи/Новороссийск, но если нет — бери самые значимые).
+Ты новостной редактор. Стиль: сухо, нейтрально.
+Выбери 5 самых важных новостей.
 
-Формат ответа:
-1) Заголовок (коротко)
-— 1 фраза: что случилось
+Формат:
+1) Заголовок
+— 1 фраза: что произошло
 — ссылка
 
 СПИСОК:
@@ -66,15 +80,14 @@ def main():
     tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(tz)
 
-    # работаем только с 06:00 до 22:00 МСК
     if not (6 <= now.hour <= 22):
-        send(f"😴 Сейчас нерабочее время (МСК): {now.strftime('%H:%M')}.")
         return
 
-    # берём не 1 час, а 6 часов — чтобы точно было что выбрать
     cutoff = now - timedelta(hours=6)
 
+    sent = load_sent()
     found = []
+
     for url in RSS_FEEDS:
         feed = feedparser.parse(url)
         for e in feed.entries:
@@ -87,22 +100,31 @@ def main():
 
             title = getattr(e, "title", "").strip()
             link = getattr(e, "link", "").strip()
-            if title and link:
-                found.append((title, link))
+
+            if not title or not link:
+                continue
+            if link in sent:
+                continue  # уже отправляли
+
+            found.append((title, link))
 
     if not found:
-        send("🗞 За последние 6 часов не нашёл новостей в RSS (похоже, ленты пустые/падают).")
+        send("🗞 Новых новостей нет (всё уже отправляли).")
         return
 
-    # Даже если нейронка упадёт — пришлём список ссылок, чтобы ты увидел, что есть вход
     try:
         text = pick_top(found)
-        send("🗞 Топ за последние 6 часов (МСК):\n\n" + text)
+        send("🗞 Новые важные новости:\n\n" + text)
+
+        # сохраняем ссылки, которые ушли
+        save_sent([link for _, link in found])
+
     except Exception as e:
-        msg = "🗞 (без нейронки) Список свежих новостей за 6 часов:\n\n"
-        for i, (t, l) in enumerate(found[:15], 1):
+        msg = "🗞 Новые новости (без нейронки):\n\n"
+        for i, (t, l) in enumerate(found[:10], 1):
             msg += f"{i}. {t}\n{l}\n\n"
         send(msg)
+        save_sent([link for _, link in found[:10]])
         print("OPENAI ERROR:", e)
 
 if __name__ == "__main__":
