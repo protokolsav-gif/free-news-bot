@@ -56,7 +56,7 @@ def main():
     if not (6 <= now.hour <= 22):
         return
 
-    cutoff = now - timedelta(hours=1)
+    cutoff = (now - timedelta(hours=3))
     collected = []
 
     for url in RSS_FEEDS:
