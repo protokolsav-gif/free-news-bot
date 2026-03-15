@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 import feedparser
 from datetime import datetime, timedelta
@@ -14,43 +15,48 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 SENT_FILE = "sent_links.txt"
 
 RSS_FEEDS = [
-    # общий поток по региону
-    "https://news.google.com/rss/search?q=(%22Краснодарский+край%22+OR+Кубань+OR+Краснодар+OR+Сочи+OR+Новороссийск+OR+Геленджик+OR+Анапа+OR+Туапсе+OR+Армавир+OR+Ейск+OR+Сириус)+when:3d&hl=ru&gl=RU&ceid=RU:ru",
-
-    # РБК
-    "https://news.google.com/rss/search?q=site:rbc.ru+(%22Краснодарский+край%22+OR+Кубань+OR+Краснодар+OR+Сочи+OR+Новороссийск+OR+Геленджик+OR+Анапа)+when:14d&hl=ru&gl=RU&ceid=RU:ru",
-
-    # Коммерсант
-    "https://news.google.com/rss/search?q=site:kommersant.ru+(%22Краснодарский+край%22+OR+Кубань+OR+Краснодар+OR+Сочи+OR+Новороссийск+OR+Геленджик+OR+Анапа)+when:14d&hl=ru&gl=RU&ceid=RU:ru",
-
-    # Медуза
-    "https://news.google.com/rss/search?q=site:meduza.io+(%22Краснодарский+край%22+OR+Кубань+OR+Краснодар+OR+Сочи+OR+Новороссийск+OR+Геленджик)+when:30d&hl=ru&gl=RU&ceid=RU:ru",
-
-    # The Insider
-    "https://news.google.com/rss/search?q=site:theins.ru+(%22Краснодарский+край%22+OR+Кубань+OR+Краснодар+OR+Сочи+OR+Новороссийск+OR+Геленджик)+when:30d&hl=ru&gl=RU&ceid=RU:ru",
-
-    # Агентство
-    "https://news.google.com/rss/search?q=site:agents.media+(%22Краснодарский+край%22+OR+Кубань+OR+Краснодар+OR+Сочи+OR+Новороссийск+OR+Геленджик)+when:30d&hl=ru&gl=RU&ceid=RU:ru",
-
-    # Проект
-    "https://news.google.com/rss/search?q=site:proekt.media+(%22Краснодарский+край%22+OR+Кубань+OR+Краснодар+OR+Сочи+OR+Новороссийск+OR+Геленджик)+when:30d&hl=ru&gl=RU&ceid=RU:ru",
-
-    # 7x7
-    "https://news.google.com/rss/search?q=site:7x7-journal.ru+(%22Краснодарский+край%22+OR+Кубань+OR+Краснодар+OR+Сочи+OR+Новороссийск+OR+Геленджик)+when:30d&hl=ru&gl=RU&ceid=RU:ru",
-
-    # коррупция / силовики / репрессии
-    "https://news.google.com/rss/search?q=(%22Краснодарский+край%22+OR+Кубань+OR+Краснодар)+(%D0%BA%D0%BE%D1%80%D1%80%D1%83%D0%BF%D1%86%D0%B8%D1%8F+OR+%D1%84%D1%81%D0%B1+OR+%D0%BC%D0%B2%D0%B4+OR+%D1%81%D0%BA+OR+%D0%B0%D1%80%D0%B5%D1%81%D1%82+OR+%D0%BE%D0%B1%D1%8B%D1%81%D0%BA+OR+%D1%81%D1%83%D0%B4+OR+%D1%83%D0%B3%D0%BE%D0%BB%D0%BE%D0%B2%D0%BD%D0%BE%D0%B5+%D0%B4%D0%B5%D0%BB%D0%BE)+when:14d&hl=ru&gl=RU&ceid=RU:ru",
-
-    # протесты / активизм
-    "https://news.google.com/rss/search?q=(%22Краснодарский+край%22+OR+Кубань+OR+Краснодар+OR+Сочи+OR+Новороссийск)+(%D0%BF%D1%80%D0%BE%D1%82%D0%B5%D1%81%D1%82+OR+%D0%BC%D0%B8%D1%82%D0%B8%D0%BD%D0%B3+OR+%D0%BF%D0%B8%D0%BA%D0%B5%D1%82+OR+%D0%B0%D0%BA%D1%86%D0%B8%D1%8F+OR+%D0%B7%D0%B0%D0%B4%D0%B5%D1%80%D0%B6%D0%B0%D0%BB%D0%B8+OR+%D0%B0%D0%BA%D1%82%D0%B8%D0%B2%D0%B8%D1%81%D1%82)+when:14d&hl=ru&gl=RU&ceid=RU:ru",
-
-    # застройка / земля / экология
-    "https://news.google.com/rss/search?q=(%D0%A1%D0%BE%D1%87%D0%B8+OR+%D0%93%D0%B5%D0%BB%D0%B5%D0%BD%D0%B4%D0%B6%D0%B8%D0%BA+OR+%D0%9D%D0%BE%D0%B2%D0%BE%D1%80%D0%BE%D1%81%D1%81%D0%B8%D0%B9%D1%81%D0%BA+OR+%D0%90%D0%BD%D0%B0%D0%BF%D0%B0+OR+%D0%9A%D1%80%D0%B0%D1%81%D0%BD%D0%BE%D0%B4%D0%B0%D1%80)+(%D0%B7%D0%B0%D1%81%D1%82%D1%80%D0%BE%D0%B9%D0%BA%D0%B0+OR+%D0%B7%D0%B5%D0%BC%D0%BB%D1%8F+OR+%D1%8D%D0%BA%D0%BE%D0%BB%D0%BE%D0%B3%D0%B8%D1%8F+OR+%D1%81%D0%B2%D0%B0%D0%BB%D0%BA%D0%B0+OR+%D0%B2%D1%8B%D1%80%D1%83%D0%B1%D0%BA%D0%B0+OR+%D0%BF%D0%BE%D0%B1%D0%B5%D1%80%D0%B5%D0%B6%D1%8C%D0%B5)+when:14d&hl=ru&gl=RU&ceid=RU:ru",
-
-    # политика / губернатор / депутаты
-    "https://news.google.com/rss/search?q=(%22%D0%9A%D1%80%D0%B0%D1%81%D0%BD%D0%BE%D0%B4%D0%B0%D1%80%D1%81%D0%BA%D0%B8%D0%B9+%D0%BA%D1%80%D0%B0%D0%B9%22+OR+%D0%9A%D1%83%D0%B1%D0%B0%D0%BD%D1%8C+OR+%D0%9A%D1%80%D0%B0%D1%81%D0%BD%D0%BE%D0%B4%D0%B0%D1%80)+(%D0%B3%D1%83%D0%B1%D0%B5%D1%80%D0%BD%D0%B0%D1%82%D0%BE%D1%80+OR+%D0%9A%D0%BE%D0%BD%D0%B4%D1%80%D0%B0%D1%82%D1%8C%D0%B5%D0%B2+OR+%D0%B4%D0%B5%D0%BF%D1%83%D1%82%D0%B0%D1%82+OR+%D0%BC%D1%8D%D1%80+OR+%D0%B0%D0%B4%D0%BC%D0%B8%D0%BD%D0%B8%D1%81%D1%82%D1%80%D0%B0%D1%86%D0%B8%D1%8F)+when:14d&hl=ru&gl=RU&ceid=RU:ru",
+    "https://www.rbc.ru/rbcfreenews.rss",
+    "https://www.kommersant.ru/RSS/news.xml",
+    "https://meduza.io/rss/all",
+    "https://7x7-journal.ru/feed",
+    "https://93.ru/rss/",
+    "https://www.livekuban.ru/rss",
+    "https://kubnews.ru/rss/",
+    "https://yuga.ru/rss/",
 ]
 
+REGION_WORDS = [
+    "краснодар",
+    "краснодарский край",
+    "кубань",
+    "сочи",
+    "анап",
+    "геленджик",
+    "новороссийск",
+    "туапсе",
+    "армавир",
+    "ейск",
+    "сириус",
+]
+
+JUNK_WORDS = [
+    "погода",
+    "туризм",
+    "турист",
+    "пляж",
+    "курортный",
+    "афиша",
+    "концерт",
+    "фестиваль",
+    "матч",
+    "футбол",
+    "хоккей",
+    "спорт",
+    "гороскоп",
+    "шоу",
+    "звезда",
+    "рецепт",
+]
 
 def send(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -65,52 +71,33 @@ def send(text):
     )
     r.raise_for_status()
 
-
 def load_sent():
     if not os.path.exists(SENT_FILE):
         return set()
     with open(SENT_FILE, "r", encoding="utf-8") as f:
         return set(line.strip() for line in f if line.strip())
 
-
 def save_sent(links):
     with open(SENT_FILE, "a", encoding="utf-8") as f:
         for link in links:
             f.write(link + "\n")
 
+def normalize_title(title):
+    title = title.lower().strip()
+    title = re.sub(r"\s+", " ", title)
+    title = re.sub(r"[«»\"'“”„]", "", title)
+    return title
 
 def is_junk(title):
     low = title.lower()
+    return any(word in low for word in JUNK_WORDS)
 
-    junk_words = [
-        "погода",
-        "синоптик",
-        "штормовое предупреждение",
-        "туризм",
-        "турист",
-        "пляж",
-        "курортный сезон",
-        "открыли сезон",
-        "афиша",
-        "концерт",
-        "фестиваль",
-        "матч",
-        "спорт",
-        "футбол",
-        "хоккей",
-        "дтп",
-        "авария без пострадавших",
-        "гороскоп",
-        "рецепт",
-        "шоу",
-        "звезда",
-    ]
-
-    return any(word in low for word in junk_words)
-
+def is_region_related(title, summary):
+    text = (title + " " + summary).lower()
+    return any(word in text for word in REGION_WORDS)
 
 def pick_top(items):
-    items = items[:50]
+    items = items[:30]
 
     joined = "\n".join(
         [f"{i+1}. {title}\n{link}" for i, (title, link) in enumerate(items)]
@@ -121,36 +108,35 @@ def pick_top(items):
 
 Тебе дали список новостей, связанных с Краснодарским краем.
 
-Нужно выбрать 5 самых важных новостей.
+Выбери 5 самых важных новостей.
 
-Приоритет тем:
-1. коррупция чиновников
+Приоритет:
+1. коррупция
 2. имущество и бизнес элит
-3. силовые структуры (ФСБ, МВД, СК)
+3. ФСБ, МВД, СК, суды
 4. репрессии и политические дела
 5. протесты, митинги, пикеты, гражданские акции
 6. региональная политика
 7. застройка и земельные конфликты
 8. экология
 9. давление на активистов и журналистов
-10. крупные бизнес-конфликты и лоббизм
+10. крупные бизнес-конфликты
 
 Игнорируй:
-- ДТП
-- бытовые происшествия
+- спорт
 - туризм
 - развлечения
+- бытовой шум
 - курортную ерунду
-- спорт
 - мелкие новости без общественного значения
 
 Пиши:
 - сухо
-- нейтрально
 - коротко
+- нейтрально
 - без пафоса
 
-Формат ответа:
+Формат:
 1) Заголовок
 — что произошло, 1 короткая фраза
 — ссылка
@@ -165,7 +151,6 @@ def pick_top(items):
     )
     return resp.output_text.strip()
 
-
 def main():
     tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(tz)
@@ -175,7 +160,9 @@ def main():
 
     cutoff = now - timedelta(hours=24)
     sent = load_sent()
+
     found = []
+    seen_titles = set()
 
     for url in RSS_FEEDS:
         feed = feedparser.parse(url)
@@ -189,6 +176,7 @@ def main():
                 continue
 
             title = getattr(e, "title", "").strip()
+            summary = getattr(e, "summary", "").strip()
             link = getattr(e, "link", "").strip()
 
             if not title or not link:
@@ -197,46 +185,44 @@ def main():
             if is_junk(title):
                 continue
 
+            if not is_region_related(title, summary):
+                continue
+
             if link in sent:
                 continue
 
+            norm_title = normalize_title(title)
+            if norm_title in seen_titles:
+                continue
+
+            seen_titles.add(norm_title)
             found.append((title, link))
 
-    # убираем дубли
-    unique = []
-    seen_links = set()
-    for title, link in found:
-        if link in seen_links:
-            continue
-        seen_links.add(link)
-        unique.append((title, link))
-
-    if not unique:
+    if not found:
         send("🗞 Новых важных новостей по Краснодарскому краю не найдено.")
         return
 
     try:
-        text = pick_top(unique)
-
+        text = pick_top(found)
         low = text.lower()
+
         if (not text.strip()) or ("ничего" in low and "важн" in low):
             msg = "🗞 Новые новости по Краснодарскому краю:\n\n"
-            for i, (t, l) in enumerate(unique[:10], 1):
+            for i, (t, l) in enumerate(found[:10], 1):
                 msg += f"{i}. {t}\n{l}\n\n"
             send(msg)
-            save_sent([link for _, link in unique[:10]])
+            save_sent([link for _, link in found[:10]])
         else:
             send("🗞 Важное по Краснодарскому краю:\n\n" + text)
-            save_sent([link for _, link in unique[:10]])
+            save_sent([link for _, link in found[:10]])
 
     except Exception as e:
         msg = "🗞 Новости по Краснодарскому краю (без нейронки):\n\n"
-        for i, (t, l) in enumerate(unique[:10], 1):
+        for i, (t, l) in enumerate(found[:10], 1):
             msg += f"{i}. {t}\n{l}\n\n"
         send(msg)
-        save_sent([link for _, link in unique[:10]])
+        save_sent([link for _, link in found[:10]])
         print("OPENAI ERROR:", e)
-
 
 if __name__ == "__main__":
     main()
