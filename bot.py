@@ -175,8 +175,8 @@ def main():
     tz = ZoneInfo("Europe/Moscow")
     now = datetime.now(tz)
 
-    if not (6 <= now.hour <= 22):
-        return
+    # if not (6 <= now.hour <= 22):
+#     return
 
     cutoff = now - timedelta(hours=24)
     sent = load_sent()
