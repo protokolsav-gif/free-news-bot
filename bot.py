@@ -73,9 +73,16 @@ def send(text):
     r.raise_for_status()
 
 def send_long(text):
-    chunks = [text[i:i+3500] for i in range(0, len(text), 3500)]
-    for chunk in chunks:
-        send(chunk)
+    parts = text.split("\n\n**")
+
+    for i, part in enumerate(parts):
+        if i != 0:
+            part = "**" + part
+
+        part = part.strip()
+
+        if part:
+            send(part)
 
 def load_sent():
     if not os.path.exists(SENT_FILE):
