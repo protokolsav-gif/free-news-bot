@@ -73,7 +73,7 @@ def send(text):
     r.raise_for_status()
 
 def send_long(text):
-    posts = text.split("---POST---")
+    posts = text.split("---")
 
     for post in posts:
         post = post.strip()
