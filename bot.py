@@ -73,11 +73,12 @@ def send(text):
     r.raise_for_status()
 
 def send_long(text):
-    posts = text.split("---")
+    posts = re.split(r"\n---\n", text)
 
     for post in posts:
         post = post.strip()
-        if post:
+
+        if len(post) > 10:
             send(post)
 
 def load_sent():
@@ -145,9 +146,9 @@ def rewrite_news(items):
 Формат КАЖДОЙ новости строго такой:
 
 Между разными новостями обязательно ставь отдельной строкой:
----POST---
+---
 
-Не ставь ---POST--- в начале и в конце ответа.
+Не ставь --- в начале и в конце ответа.
 
 **Заголовок**
 
