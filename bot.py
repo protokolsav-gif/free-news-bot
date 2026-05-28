@@ -73,16 +73,12 @@ def send(text):
     r.raise_for_status()
 
 def send_long(text):
-    parts = text.split("\n\n**")
+    posts = text.split("---POST---")
 
-    for i, part in enumerate(parts):
-        if i != 0:
-            part = "**" + part
-
-        part = part.strip()
-
-        if part:
-            send(part)
+    for post in posts:
+        post = post.strip()
+        if post:
+            send(post)
 
 def load_sent():
     if not os.path.exists(SENT_FILE):
@@ -147,6 +143,11 @@ def rewrite_news(items):
 — проходные события
 
 Формат КАЖДОЙ новости строго такой:
+
+Между разными новостями обязательно ставь отдельной строкой:
+---POST---
+
+Не ставь ---POST--- в начале и в конце ответа.
 
 **Заголовок**
 
